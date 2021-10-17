@@ -1,0 +1,103 @@
+version: '3'
+
+services: 
+  traefik:
+    image: traefik:v2.5.3
+    container_name: traefik 
+    restart: always 
+    command: 
+      # Log
+      - "--log.level=DEBUG"
+
+      # API & Dashbaord
+      - "--api"
+
+      # Enabled Docker and don't expose Container
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--providers.docker.watch"
+
+      # Define Web Entrypoints
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+
+      # DNS Challenge
+      - "--certificatesresolvers.myresolver.acme.dnschallenge=true" 
+      - "--certificatesresolvers.myresolver.acme.dnschallenge.provider=cloudflare"
+      - "--certificatesresolvers.myresolver.acme.storage=/letsencrypt/acme.json"
+    labels:
+      # http to https redirect
+      - "traefik.http.routers.http-catchall.rule=hostregexp(`{host:[a-z-.]+}`)"
+      - "traefik.http.routers.http-catchall.entrypoints=web"
+      - "traefik.http.routers.http-catchall.middlewares=redirect-to-https"
+
+      # middleware redirect
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+      - "traefik.http.middlewares.redirect-to-https.redirectscheme.permanent=true"
+
+      # enable traefik
+      - "traefik.enable=true" 
+
+      # traefik settings
+      - "traefik.http.routers.api.service=api@internal"
+      - "traefik.http.routers.traefik.rule=Host(`traefik.slimegirl.moe`)"
+      - "traefik.http.services.traefik.loadbalancer.server.port=8080"
+      - "traefik.http.routers.traefik.entrypoints=websecure"
+      - "traefik.http.routers.traefik.tls.certresolver=myresolver"
+    ports: 
+      - "443:443"
+      - "8080:8080"
+    environment: 
+      - "CF_DNS_API_TOKEN=${CF_API_TOKEN}"
+    volumes: 
+      - "letsencrypt:/letsencrypt"
+      - "/var/run/docker.sock:/var/run/docker.sock:ro"
+
+  vaultwarden:
+    image: vaultwarden/server:1.22.2
+    container_name: vaultwarden
+    restart: always
+    environment: 
+      - WEBSOCKET_ENABLED=true
+    labels:
+      - "traefik.http.routers.vaultwarden.rule=Host(`pw.slimegirl.moe`)"
+      - "traefik.http.routers.vaultwarden.entrypoints=websecure"
+      - "traefik.http.routers.vaultwarden.tls.certresolver=myresolver"
+      - "traefik.http.services.vaultwarden.loadbalancer.server.port=80"
+      - "traefik.enable=true"
+    volumes: 
+      - "vaultwarden:/data"
+
+  pihole:
+    image: pihole/pihole:2021.10
+    container_name: pihole
+    restart: always
+    environment: 
+    #  WEBPASSWORD: your_password
+      TZ: Europe/Berlin
+    ports:
+      - "53:53/tcp"
+      - "53:53/udp"
+      - "67:67/udp"
+    labels: 
+      - "traefik.http.routers.pihole.rule=Host(`pihole.slimegirl.moe`)"
+      - "traefik.http.routers.pihole.entrypoints=websecure"
+      - "traefik.http.routers.pihole.tls.certresolver=myresolver"
+      - "traefik.http.services.pihole.loadbalancer.server.port=80"
+      - "traefik.enable=true"
+    volumes:
+      - "pihole:/etc/pihole/"
+      - "pihole_dnsmasq:/etc/dnsmasq.d/"
+    cap_add: 
+      - NET_ADMIN
+
+
+volumes: 
+  vaultwarden:
+    external: true
+  pihole:
+    external: true
+  pihole_dnsmasq:
+    external: true
+  letsencrypt:
+    external: true
