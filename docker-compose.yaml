@@ -53,6 +53,19 @@ services:
       - "letsencrypt:/letsencrypt"
       - "/var/run/docker.sock:/var/run/docker.sock:ro"
 
+  homer:
+    image: b4bz/homer:latest
+    container_name: homer
+    restart: always
+    labels:
+      - "traefik.http.routers.homer.rule=Host(`home.slimegirl.moe`)"
+      - "traefik.http.routers.homer.entrypoints=websecure"
+      - "traefik.http.routers.homer.tls.certresolver=myresolver"
+      - "traefik.http.services.homer.loadbalancer.server.port=8080"
+      - "traefik.enable=true"
+    volumes:
+      - "homer:/www/assets"
+
   vaultwarden:
     image: vaultwarden/server:latest
     container_name: vaultwarden
@@ -98,6 +111,23 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
 
+  portainer:
+    image: portainer/portainer-ce:latest
+    container_name: portainer
+    restart: always
+    ports:
+      - "8000:8000"
+    labels: 
+      - "traefik.http.routers.portainer.rule=Host(`portainer.slimegirl.moe`)"
+      - "traefik.http.routers.portainer.entrypoints=websecure"
+      - "traefik.http.routers.portainer.tls.certresolver=myresolver"
+      - "traefik.http.services.portainer.loadbalancer.server.port=9000"
+      - "traefik.enable=true"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - "portainer:/data"
+
+
 volumes: 
   vaultwarden:
     external: true
@@ -106,4 +136,8 @@ volumes:
   pihole_dnsmasq:
     external: true
   letsencrypt:
+    external: true
+  homer:
+    external: true
+  portainer:
     external: true
